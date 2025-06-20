@@ -9,6 +9,13 @@ type StartGameResponse = {
 	url_discover: string;
 };
 
+type Cell = {
+	x: number;
+	y: number;
+	move: boolean;
+	value: string; // 'wall', 'path', etc.
+};
+
 async function startGame(): Promise<StartGameResponse> {
 	const player = process.env.PLAYER_NAME;
 
@@ -20,9 +27,8 @@ async function startGame(): Promise<StartGameResponse> {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/x-www-form-urlencoded',
-			'Accept': 'application/json',
 		},
-		body: `player=${encodeURIComponent(player)}`,
+		body: new URLSearchParams({ player }),
 	});
 
 	if (!response.ok) {
@@ -31,7 +37,6 @@ async function startGame(): Promise<StartGameResponse> {
 	}
 
 	const data = await response.json();
-
 	console.log('✅ Game started');
 	console.log(`📍 Starting position: (${data.position_x}, ${data.position_y})`);
 	console.log(`➡️  Move URL: ${data.url_move}`);
@@ -40,9 +45,32 @@ async function startGame(): Promise<StartGameResponse> {
 	return data;
 }
 
+async function discoverSurroundings(url: string, currentX: number, currentY: number): Promise<void> {
+	const response = await fetch(url);
+
+	if (!response.ok) {
+		const error = await response.text();
+		throw new Error(`❌ Failed to discover surroundings: ${response.status} - ${error}`);
+	}
+
+	const cells: Cell[] = await response.json();
+
+	const top = cells.find(c => c.x === currentX && c.y === currentY - 1);
+	const bottom = cells.find(c => c.x === currentX && c.y === currentY + 1);
+	const left = cells.find(c => c.x === currentX - 1 && c.y === currentY);
+	const right = cells.find(c => c.x === currentX + 1 && c.y === currentY);
+
+	console.log('🔎 Discovered surroundings:');
+	console.log(`⬆️  Top: ${top?.value ?? 'unknown'} (move: ${top?.move ?? '-'})`);
+	console.log(`⬇️  Bottom: ${bottom?.value ?? 'unknown'} (move: ${bottom?.move ?? '-'})`);
+	console.log(`⬅️  Left: ${left?.value ?? 'unknown'} (move: ${left?.move ?? '-'})`);
+	console.log(`➡️  Right: ${right?.value ?? 'unknown'} (move: ${right?.move ?? '-'})`);
+}
+
 async function main() {
 	try {
-		await startGame();
+		const { position_x, position_y, url_discover } = await startGame();
+		await discoverSurroundings(url_discover, position_x, position_y);
 	} catch (error) {
 		console.error(error);
 	}
